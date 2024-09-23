@@ -100,20 +100,15 @@ class EditTable:
         
         min_value = float('inf')
         for i in range(1, len(self._query) + 1):
-            # Get the values from the neighboring cells
             deletion = self._table[i][j-1] + 1
             insertion = self._table[i-1][j] + 1
-            substitution = self._table[i-1][j-1] + (0 if self._query[i-1] == self._candidate[j-1] else 1)
+            substitution = self._table[i-1][j-1] + (self._query[i-1] != self._candidate[j-1])
             
-            # Calculate the minimum of the three operations
             self._table[i][j] = min(deletion, insertion, substitution)
             
-            # Check for transposition if possible
             if i > 1 and j > 1 and self._query[i-1] == self._candidate[j-2] and self._query[i-2] == self._candidate[j-1]:
-                transposition = self._table[i-2][j-2] + 1
-                self._table[i][j] = min(self._table[i][j], transposition)
+                self._table[i][j] = min(self._table[i][j], self._table[i-2][j-2] + 1)
             
-            # Update the minimum value in this column
             min_value = min(min_value, self._table[i][j])
         
         return min_value
@@ -128,7 +123,7 @@ class EditTable:
         that need to deal with candidate strings longer than what was initially anticipated.
         """
         
-        # Ensure the table has enough columns
+        # Extend table and candidate if needed
         while len(self._table[0]) <= j:
             for row in self._table:
                 row.append(0)
@@ -142,20 +137,16 @@ class EditTable:
 
         min_value = float('inf')
         for i in range(1, len(self._query) + 1):
-            # Get the values from the neighboring cells
             deletion = self._table[i][j-1] + 1
             insertion = self._table[i-1][j] + 1
-            substitution = self._table[i-1][j-1] + (0 if self._query[i-1] == symbol else 1)
+            substitution = self._table[i-1][j-1] + (self._query[i-1] != symbol)
             
-            # Calculate the minimum of the three operations
             self._table[i][j] = min(deletion, insertion, substitution)
             
-            # Check for transposition if possible
+            # Check for transposition
             if i > 1 and j > 1 and self._query[i-1] == self._candidate[j-2] and self._query[i-2] == self._candidate[j-1]:
-                transposition = self._table[i-2][j-2] + 1
-                self._table[i][j] = min(self._table[i][j], transposition)
+                self._table[i][j] = min(self._table[i][j], self._table[i-2][j-2] + 1)
             
-            # Update the minimum value in this column
             min_value = min(min_value, self._table[i][j])
         
         return min_value

@@ -27,6 +27,24 @@ class StringFinder:
         self.__normalizer = normalizer  # The same as was used for trie building.
         self.__tokenizer = tokenizer  # The same as was used for trie building.
 
+    # Tokenize the input buffer
+    # tokens = list(self.__tokenizer.strings(buffer))
+
+    # Initialize the list of live states
+    # Keep a list of "live states". As you iterate once over the tokens in the buffer, 
+    # update and main this list of "live states". List comprehensions are your friend. :)
+    #
+    # The set of currently explored states. We represent a state as a triple consisting of
+    # (a) a node in the trie that represents where in the trie we are after having consumed zero or more characters
+    # (b) an index that represents the position into the original buffer where the state was "born"
+    # (c) a string that represents the symbols consumed so far to get to the current state
+    # 
+    # (a) is what we advance along the way
+    # (b) is needed so that we know where we first started if/when a match is found
+    # (c) is needed so that we can differentiate between the surface
+    #     form of the match and the (possibly heavily normalized) base form of the match.
+    # live_states: List[Tuple[Trie, int, str]] = [(self.__trie, 0, "")]
+    
     def scan(self, buffer: str) -> Iterator[Dict[str, Any]]:
         """
         Scans the given buffer and finds all dictionary entries in the trie that are also present in the
@@ -46,34 +64,75 @@ class StringFinder:
         support for leftmost-longest matching (instead of reporting all matches), and more.
         """
         
-        # Tokenize the input buffer
-        tokens = list(self.__tokenizer.strings(buffer))
+        tokens = self.__tokenizer.tokens(buffer)        
+
+        live_states = [(self.__trie, 0, "")]
         
-        # Iterate through all possible starting positions
-        for start_idx in range(len(buffer)):
-            node = self.__trie
-            current_surface = []
-            current_normalized = []
+        # print("Iterating through tokens...\n")
+        
+        for token, (start, end) in tokens:
+            token = self.__normalizer.normalize(token)
+            new_live_states = [state for state in live_states]
             
-            # Traverse the trie from the current starting position
-            for idx in range(start_idx, len(buffer)):
-                current_token = buffer[idx]
-                normalized_token = self.__normalizer.normalize(current_token)
+            # print(f"\nCurrent token: '{token}'")
+            
+            # print("Iterating through live states...\n")
+            
+            for state_index, (state, state_start, consumed) in enumerate(new_live_states):
+                # print(f"live_states[{state_index}]: Trie: {list(state.strings())}, Start: {state_start}, Consumed: '{consumed}'")
                 
-                child = node.child(normalized_token)
-                if child is None:
-                    break
-                node = child
+                # if state.is_final():
+                #     state pop? maybe
                 
-                current_surface.append(current_token)
-                current_normalized.append(normalized_token)
+                # if first token in match, make state_start the start of the token
+                if consumed == "":
+                    state_start = start
                 
-                # If we've reached a final state in the trie, yield a match
-                if node.is_final():
-                    surface = ''.join(current_surface)
+                next_state = state.consume(token)
+                
+                needs_space = False
+                if next_state is None:
+                    next_state = state.consume(" " + token)
+                    needs_space = True
+                
+                # print(f"Next state after consuming '{token}' is {list(next_state.strings()) if next_state is not None else None}\n")
+                
+                if next_state is None:
+                    # if not state_index == 0: # if not at root
+                        # print(f"Removing live_states[{state_index}]: Start: {state_start}, Consumed: '{consumed}'")
+                        # new_live_states.pop(state_index) # remove irrelevant state
+                    continue
+                
+                consumed = consumed + token if not needs_space else consumed + " " + token
+                
+                if next_state.is_final():
+                    
+                    match = consumed
+                    surface = " ".join(buffer[state_start:end].split())
+                    span = (state_start, end)
+                    meta = next_state.get_meta()
+                    
+                    # print("Yielding match:", {"match": match, "surface": surface, "span": span, "meta": meta}, "\n")
+                    
                     yield {
-                        "match": ''.join(current_normalized),
                         "surface": surface,
-                        "meta": node.get_meta(),
-                        "span": (start_idx, idx + 1)
+                        "span": span,
+                        "match": match,
+                        "meta": meta
                     }
+                
+                # print(f"Appending new live state: {list(next_state.strings()), start, consumed}\n")
+                new_live_states.append((next_state, state_start, consumed))
+                
+            live_states = new_live_states
+
+# live_states:
+# The set of currently explored states. We represent a state as a triple consisting of
+# (a) a node in the trie (that represents where in the trie we are after having consumed zero or more characters), 
+# (b) an index (that represents the position into the original buffer where the state was "born"), and 
+# (c) a string (that represents the symbols consumed so far to get to the current state.) 
+# 
+# (a) is what we advance along the way
+# (b) is needed so that we know where we first started if/when a match is found
+# (c) is needed so that we can differentiate between the surface form of the match and the (possibly heavily normalized) base form of the match.
+# live_states: List[Tuple[Trie, int, str]] = [(self.__trie, 0, '')]

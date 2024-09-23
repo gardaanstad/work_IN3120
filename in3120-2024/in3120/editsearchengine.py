@@ -91,12 +91,17 @@ class EditSearchEngine:
         # traverse the trie we can avoid recomputing large parts of the table.
         table = EditTable(tail, "?" * 10, False)
 
+        candidates_retrieved = 0
+
         # Receives matches from the search, as they are found. The search aborts if the callback
         # returns False, i.e., when we have received sufficiently many candidate matches.
         def callback(distance: int, candidate: str, meta: Any) -> bool:
-            score = scorer(distance, tail, candidate)
+            score = scorer(distance, query, candidate)
             sieve.sift(score, (distance, candidate, meta))
-            return len(sieve._Sieve__heap) < candidate_count
+            
+            nonlocal candidates_retrieved
+            candidates_retrieved += 1
+            return candidates_retrieved < candidate_count
 
         # Search! We receive and sift results via the callback.
         if root:
@@ -121,29 +126,29 @@ class EditSearchEngine:
         reasonable lengths, but could merit a second look if we look to apply this to other
         use cases.
         """
-        
-        # Get the minimum edit distance for the current level
-        min_distance = table.update(level)
-
-        # If the minimum distance exceeds the upper bound, prune this branch
-        if min_distance > upper_bound:
-            return True
 
         # Check if this node is a final state (i.e., represents a complete word)
         if node.is_final():
             distance = table.distance(level)
-            if distance <= upper_bound:
-                candidate = table.prefix(level)
-                meta = node.get_meta()
-                if not callback(distance, candidate, meta):
-                    return False  # Abort search if callback returns False
+            
+            if distance > upper_bound:
+                return True
+            
+            candidate = table.prefix(level)
+            meta = node.get_meta()
+            
+            if not callback(distance, candidate, meta):
+                return False
 
         # Recursively explore child nodes
         for symbol in node.transitions():
+            distance = table.update2(level + 1, symbol)
+            if distance > upper_bound:
+                continue
+            
             child = node.child(symbol)
-            if child:
-                table.update2(level + 1, symbol)
-                if not self.__dfs(child, level + 1, table, upper_bound, callback):
-                    return False  # Abort search if a child exploration returns False
-
+            
+            if not self.__dfs(child, level + 1, table, upper_bound, callback):
+                return False  # Abort search if a child exploration returns False
+        
         return True
