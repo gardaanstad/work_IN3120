@@ -86,43 +86,35 @@ class StringFinder:
         for token, (start, end) in tokens:
             token = self.__normalizer.normalize(token)
             
-            # print(f"\nCurrent token: '{token}'")
+            new_live_states = []
+            states_to_remove = set()
             
-            # print("Iterating through live states...\n")
-            
-            new_live_states = [state for state in live_states]
-            
-            # iterate through live_states in reverse order, to make sure we prune latest states first, and yield in correct order
-            for state_index, (state, state_start, consumed) in reversed(list(enumerate(live_states))):
-                # print(f"Live states length: {len(live_states)}")
-                # print(f"live_states[{state_index}]: Trie: {list(state.strings())}, Start: {state_start}, Consumed: '{consumed}'")
+            # iterate through live_states in reverse order, to make sure we prune/yield latest states first
+            for state_index, (state, state_start, state_consumed) in reversed(list(enumerate(live_states))):
                 
-                # if first token in match, set state_start as the start of the current token
-                if consumed == "":
-                    state_start = start
-                    
                 # __consume() returns a Tuple of next_state Trie (or None), and the string of consumed
-                next_state, consumed = __consume(state, token, consumed)
-                
-                # print(f"Next state after consuming '{token}' is {list(next_state.strings()) if next_state is not None else None}")
-                # print(f"Next state transitions: {next_state.transitions() if next_state is not None else None}\n")
+                next_state, next_consumed = __consume(state, token, state_consumed)
                 
                 # if branching from the current state with the current token is impossible, 
-                # remove this irrelevant state from new_live_states
+                # remove this irrelevant state from new_live_states (irrelevant state pruning)
+                # if we're at the root state, don't remove it, just skip to next state (continue)
                 if next_state is None:
-                    if len(new_live_states) > state_index and not state_index == 0: # if not at root and index exists
-                        # print(f"Removing live_states[{state_index}]: Start: {state_start}, Consumed: '{consumed}'")
-                        new_live_states.pop(state_index) # remove irrelevant state
+                    if state_index == 0: # if at root
+                        continue
+                    
+                    states_to_remove.add(state_index) # add irrelevant state's index to states_to_remove
                     continue
                 
-                # found match
+                # if first token in match, set state_start as the start of the current token
+                if state_consumed == "":
+                    state_start = start
+                
+                # found match (current state = ["token"], next state = [""])
                 if next_state.is_final():
-                    match = consumed
                     surface = " ".join(buffer[state_start:end].split()) # space normalized surface
                     span = (state_start, end) # start of current live state, end of current token
+                    match = next_consumed
                     meta = next_state.get_meta()
-                    
-                    # print("Yielding match:", {"match": match, "surface": surface, "span": span, "meta": meta}, "\n")
                     
                     yield {
                         "surface": surface,
@@ -131,24 +123,11 @@ class StringFinder:
                         "meta": meta
                     }
                 
-                # don't append if no transitions except for final, aka:
-                # next_state == [""], next_state.transitions() == []
-                if len(next_state.transitions()) == 0 and next_state.is_final(): 
+                # don't append the state if it has no transitions (state is dead/already consumed + yielded)
+                if len(next_state.transitions()) == 0:
                     continue
-                    
-                # print(f"Appending new live state: {list(next_state.strings()), start, consumed}\n")
-                new_live_states.append((next_state, state_start, consumed))
+                
+                new_live_states.append((next_state, state_start, next_consumed))
             
-            # print(f"Live states ({len(live_states)}) = New live states ({len(new_live_states)})")
-            live_states = new_live_states # replace live_states with the newly constructed new_live_states once for every token
-
-# live_states:
-# The set of currently explored states. We represent a state as a triple consisting of
-# (a) a node in the trie (that represents where in the trie we are after having consumed zero or more characters), 
-# (b) an index (that represents the position into the original buffer where the state was "born"), and 
-# (c) a string (that represents the symbols consumed so far to get to the current state.) 
-# 
-# (a) is what we advance along the way
-# (b) is needed so that we know where we first started if/when a match is found
-# (c) is needed so that we can differentiate between the surface form of the match and the (possibly heavily normalized) base form of the match.
-# live_states: List[Tuple[Trie, int, str]] = [(self.__trie, 0, '')]
+            # live_states = live_states excluding states_to_remove plus new_live_states
+            live_states = [state for i, state in enumerate(live_states) if i not in states_to_remove] + new_live_states 
