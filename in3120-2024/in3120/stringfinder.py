@@ -2,7 +2,7 @@
 # pylint: disable=line-too-long
 # pylint: disable=too-few-public-methods
 
-from typing import Iterator, Dict, Any, List, Tuple
+from typing import Iterator, Dict, Any, List, Tuple, Optional
 from .normalizer import Normalizer
 from .tokenizer import Tokenizer
 from .trie import Trie
@@ -64,17 +64,27 @@ class StringFinder:
         support for leftmost-longest matching (instead of reporting all matches), and more.
         """
         
+        def __consume(state: Trie, token: str, consumed: str) -> Tuple[Optional[Trie], str]:
+            """
+            Internal helper method to reduce complexity in main function logic.
+            Returns a tuple of [next Trie state after consuming token, or None if it doesn't exist],
+            and [the correctly constructed consumed string]
+            """
+            next_state = state.consume(token)
+            
+            if next_state is not None:
+                return next_state, consumed + token
+            
+            return state.consume(" " + token), consumed + " " + token
+        
+        # [(token, (start, end)), (token, (start, end)), ...]
         tokens = self.__tokenizer.tokens(buffer)        
 
+        # initialize live_states on root Trie node, 0 start index and empty consumed
         live_states = [(self.__trie, 0, "")]
-        
-        # print("Iterating through tokens...\n")
-        
-        
         
         for token, (start, end) in tokens:
             token = self.__normalizer.normalize(token)
-            
             
             # print(f"\nCurrent token: '{token}'")
             
@@ -82,38 +92,34 @@ class StringFinder:
             
             new_live_states = [state for state in live_states]
             
-            for state_index, (state, state_start, consumed) in enumerate(live_states):
+            # iterate through live_states in reverse order, to make sure we prune latest states first, and yield in correct order
+            for state_index, (state, state_start, consumed) in reversed(list(enumerate(live_states))):
                 # print(f"Live states length: {len(live_states)}")
                 # print(f"live_states[{state_index}]: Trie: {list(state.strings())}, Start: {state_start}, Consumed: '{consumed}'")
                 
-                
-                
-                # if first token in match, make state_start the start of the token
+                # if first token in match, set state_start as the start of the current token
                 if consumed == "":
                     state_start = start
-                
-                next_state = state.consume(token)
-                
-                needs_space = False
-                if next_state is None:
-                    next_state = state.consume(" " + token)
-                    needs_space = True
+                    
+                # __consume() returns a Tuple of next_state Trie (or None), and the string of consumed
+                next_state, consumed = __consume(state, token, consumed)
                 
                 # print(f"Next state after consuming '{token}' is {list(next_state.strings()) if next_state is not None else None}")
                 # print(f"Next state transitions: {next_state.transitions() if next_state is not None else None}\n")
                 
+                # if branching from the current state with the current token is impossible, 
+                # remove this irrelevant state from new_live_states
                 if next_state is None:
                     if len(new_live_states) > state_index and not state_index == 0: # if not at root and index exists
                         # print(f"Removing live_states[{state_index}]: Start: {state_start}, Consumed: '{consumed}'")
                         new_live_states.pop(state_index) # remove irrelevant state
                     continue
                 
-                consumed = consumed + token if not needs_space else consumed + " " + token
-                
+                # found match
                 if next_state.is_final():
                     match = consumed
-                    surface = " ".join(buffer[state_start:end].split())
-                    span = (state_start, end)
+                    surface = " ".join(buffer[state_start:end].split()) # space normalized surface
+                    span = (state_start, end) # start of current live state, end of current token
                     meta = next_state.get_meta()
                     
                     # print("Yielding match:", {"match": match, "surface": surface, "span": span, "meta": meta}, "\n")
@@ -134,7 +140,7 @@ class StringFinder:
                 new_live_states.append((next_state, state_start, consumed))
             
             # print(f"Live states ({len(live_states)}) = New live states ({len(new_live_states)})")
-            live_states = new_live_states
+            live_states = new_live_states # replace live_states with the newly constructed new_live_states once for every token
 
 # live_states:
 # The set of currently explored states. We represent a state as a triple consisting of
