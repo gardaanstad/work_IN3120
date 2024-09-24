@@ -70,19 +70,23 @@ class StringFinder:
         
         # print("Iterating through tokens...\n")
         
+        
+        
         for token, (start, end) in tokens:
             token = self.__normalizer.normalize(token)
-            new_live_states = [state for state in live_states]
+            
             
             # print(f"\nCurrent token: '{token}'")
             
             # print("Iterating through live states...\n")
             
-            for state_index, (state, state_start, consumed) in enumerate(new_live_states):
+            new_live_states = [state for state in live_states]
+            
+            for state_index, (state, state_start, consumed) in enumerate(live_states):
+                # print(f"Live states length: {len(live_states)}")
                 # print(f"live_states[{state_index}]: Trie: {list(state.strings())}, Start: {state_start}, Consumed: '{consumed}'")
                 
-                # if state.is_final():
-                #     state pop? maybe
+                
                 
                 # if first token in match, make state_start the start of the token
                 if consumed == "":
@@ -95,18 +99,18 @@ class StringFinder:
                     next_state = state.consume(" " + token)
                     needs_space = True
                 
-                # print(f"Next state after consuming '{token}' is {list(next_state.strings()) if next_state is not None else None}\n")
+                # print(f"Next state after consuming '{token}' is {list(next_state.strings()) if next_state is not None else None}")
+                # print(f"Next state transitions: {next_state.transitions() if next_state is not None else None}\n")
                 
                 if next_state is None:
-                    # if not state_index == 0: # if not at root
+                    if len(new_live_states) > state_index and not state_index == 0: # if not at root and index exists
                         # print(f"Removing live_states[{state_index}]: Start: {state_start}, Consumed: '{consumed}'")
-                        # new_live_states.pop(state_index) # remove irrelevant state
+                        new_live_states.pop(state_index) # remove irrelevant state
                     continue
                 
                 consumed = consumed + token if not needs_space else consumed + " " + token
                 
                 if next_state.is_final():
-                    
                     match = consumed
                     surface = " ".join(buffer[state_start:end].split())
                     span = (state_start, end)
@@ -121,9 +125,15 @@ class StringFinder:
                         "meta": meta
                     }
                 
+                # don't append if no transitions except for final, aka:
+                # next_state == [""], next_state.transitions() == []
+                if len(next_state.transitions()) == 0 and next_state.is_final(): 
+                    continue
+                    
                 # print(f"Appending new live state: {list(next_state.strings()), start, consumed}\n")
                 new_live_states.append((next_state, state_start, consumed))
-                
+            
+            # print(f"Live states ({len(live_states)}) = New live states ({len(new_live_states)})")
             live_states = new_live_states
 
 # live_states:

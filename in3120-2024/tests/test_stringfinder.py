@@ -76,17 +76,53 @@ class TestStringFinder(unittest.TestCase):
     #     cran = in3120.InMemoryCorpus("../data/cran.xml")
     #     trie = in3120.Trie.from_strings((d["body"] or "" for d in mesh), self.__normalizer, self.__tokenizer)
     #     finder = in3120.StringFinder(trie, self.__normalizer, self.__tokenizer)
-    #     # self.__simple_verify(finder, cran[0]["body"], [("wing", "wing"), ("wing", "wing")])
-    #     # self.__simple_verify(finder, cran[3]["body"], [("solutions", "solutions"), ("skin", "skin"), ("friction", "friction")])
-    #     # self.__simple_verify(finder, cran[1254]["body"], [("electrons", "electrons"), ("ions", "ions")])
         
-    #     # results = list(finder.scan(cran[0]["body"])) # surface: 'wing', match: 'wing'
-    #     # results = list(finder.scan(cran[3]["body"])) # surface: 'solutions', match: 'solutions', surface: 'skin', match: 'skin', surface: 'friction', match: 'friction'
-    #     results = list(finder.scan(cran[1254]["body"])) # surface: 'electrons', match: 'electrons', surface: 'ions', match: 'ions'
+    #     results1 = list(finder.scan(cran[0]["body"])) # surface: 'wing', match: 'wing'
+    #     results2 = list(finder.scan(cran[3]["body"])) # surface: 'solutions', match: 'solutions', surface: 'skin', match: 'skin', surface: 'friction', match: 'friction'
+    #     results3 = list(finder.scan(cran[1254]["body"])) # surface: 'electrons', match: 'electrons', surface: 'ions', match: 'ions'
+    #     results = results1 + results2 + results3
+        
+    #     # expected:
+    #     # {'surface': 'wing', 'span': (0, 4), 'match': 'wing', 'meta': None}
+    #     # {'surface': 'wing', 'span': (0, 4), 'match': 'wing', 'meta': None}
+    #     # {'surface': 'solutions', 'span': (0, 7), 'match': 'solutions', 'meta': None}
+    #     # {'surface': 'skin', 'span': (8, 12), 'match': 'skin', 'meta': None}
+    #     # {'surface': 'friction', 'span': (13, 20), 'match': 'friction', 'meta': None}
+    #     # {'surface': 'electrons', 'span': (0, 7), 'match': 'electrons', 'meta': None}
+    #     # {'surface': 'ions', 'span': (8, 12), 'match': 'ions', 'meta': None}
+        
     #     print(f"\nMatches from test:")
     #     for match in results:
     #         print(match)
     #     print("\n")
+    
+    # TODO
+    def test_scan_matches_and_surface_forms_only(self):
+        strings = ["romerike", "apple computer", "norsk", "norsk ørret", "sverige", "ørret", "banan", "a", "a b"]
+        trie = in3120.Trie.from_strings(strings, self.__normalizer, self.__tokenizer)
+        finder = in3120.StringFinder(trie, self.__normalizer, self.__tokenizer)
+        
+        results1 = list(finder.scan("en Norsk     ØRRET fra romerike likte abba fra Sverige")) # ["Norsk", "norsk", "Norsk ØRRET", "norsk ørret", "ØRRET", "ørret", "romerike", "sverige"]
+        results2 = list(finder.scan("the apple is red")) # []
+        results3 = list(finder.scan("")) # []
+        results4 = list(finder.scan("apple computer banan foo sverige ben reddik fy fasan")) # [("apple computer", "apple computer"), ("banan", "banan"), ("sverige", "sverige")]
+        results5 = list(finder.scan("a a b")) # [("a", "a"), ("a", "a"), ("a b", "a b")]
+        
+        results = results1 + results2 + results3 + results4 + results5
+        
+        # expected:
+        # {"surface": "Norsk", "span": (0, 5), "match": "norsk", "meta": None}
+        # {"surface": "Norsk ØRRET", "span": (0, 11), "match": "norsk ørret", "meta": None}
+        # {"surface": "ØRRET", "span": (12, 17), "match": "ørret", "meta": None}
+        # {"surface": "romerike", "span": (18, 26), "match": "romerike", "meta": None}
+        # {"surface": "Sverige", "span": (30, 36), "match": "sverige", "meta": None}
+        
+        print(f"\nMatches from test:")
+        for match in results:
+            print(match)
+        print("\n")
+        
+        # bare feil rekkefølge yielding???
     
     # ==============================================================================================
 
